@@ -119,6 +119,52 @@ export default function Controls({
         </motion.div>
       )}
 
+      {/* Effects key */}
+      {effectsEnabled && (
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gray-900/90 backdrop-blur-md rounded-xl border border-gray-700/50 p-3"
+        >
+          <div className="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">Effects Key</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-0.5 bg-blue-400/60 rounded" />
+              <span className="text-[10px] text-gray-400">Rain</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 bg-white/60 rounded-full" style={{ fontSize: '6px' }} />
+              <span className="text-[10px] text-gray-400">Snow</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-gray-400/20" />
+              <span className="text-[10px] text-gray-400">Clouds</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 rounded bg-gray-400/15" />
+              <span className="text-[10px] text-gray-400">Fog</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-0.5 h-3 bg-yellow-100/80 rounded" />
+              <span className="text-[10px] text-gray-400">Lightning</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-0.5 bg-blue-300/30 rounded" />
+              <span className="text-[10px] text-gray-400">Wind streaks</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 rounded" style={{ background: 'linear-gradient(to right, rgba(100,255,100,0.3), rgba(150,100,255,0.3))' }} />
+              <span className="text-[10px] text-gray-400">Aurora</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-2 rounded bg-gray-900/40" />
+              <span className="text-[10px] text-gray-400">Night</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Click hint */}
       <motion.div
         initial={{ opacity: 0 }}

@@ -108,6 +108,24 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
   const lastLightningSpawn = useRef<number>(0);
   const frameCount = useRef<number>(0);
 
+  // Check if a lat/lng is on the visible side of the globe
+  const isVisible = useCallback((map: mapboxgl.Map, lng: number, lat: number): boolean => {
+    try {
+      // Get the map centre
+      const centre = map.getCenter();
+      // Angular distance from centre
+      const dLat = (lat - centre.lat) * Math.PI / 180;
+      const dLng = (lng - centre.lng) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(centre.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      const angularDist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      // At globe view, ~90 degrees from centre is the horizon
+      return angularDist < Math.PI / 2;
+    } catch {
+      return true;
+    }
+  }, []);
+
   useEffect(() => {
     if (!map || !enabled || grid.length === 0) return;
 
@@ -314,6 +332,15 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       return { lat: declination, lng: sunLng > 180 ? sunLng - 360 : sunLng };
     }
 
+    // Project a point only if visible on this side of globe
+    function projectVisible(lng: number, lat: number): { x: number; y: number } | null {
+      if (!isVisible(map!, lng, lat)) return null;
+      const pt = map!.project([lng, lat]);
+      const rect = container.getBoundingClientRect();
+      if (pt.x < -30 || pt.x > rect.width + 30 || pt.y < -30 || pt.y > rect.height + 30) return null;
+      return pt;
+    }
+
     function animate() {
       if (!map) return;
       const rect = container.getBoundingClientRect();
@@ -323,57 +350,23 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       const time = frameCount.current;
 
       // === DAY/NIGHT TERMINATOR ===
-      // Draw as a smooth filled polygon along the terminator line
       const sun = getSunPosition();
       ctx.save();
-      
-      // Find the terminator line (where cosAngle ≈ 0)
-      // Draw a filled shape for the night side
-      const nightPoints: { x: number; y: number }[] = [];
-      const step = 4;
-      
-      // Trace the terminator from south to north
-      for (let lat = -80; lat <= 80; lat += step) {
-        // Find the longitude where cosAngle = 0 (terminator)
-        const sinLat = Math.sin(lat * Math.PI / 180);
-        const cosLat = Math.cos(lat * Math.PI / 180);
-        const sinDecl = Math.sin(sun.lat * Math.PI / 180);
-        const cosDecl = Math.cos(sun.lat * Math.PI / 180);
-        
-        const cosH = -(sinLat * sinDecl) / (cosLat * cosDecl);
-        
-        if (Math.abs(cosH) <= 1) {
-          const hourAngle = Math.acos(cosH) * (180 / Math.PI);
-          // Two terminator longitudes (east and west of sun)
-          const termLng1 = sun.lng + hourAngle;
-          const termLng2 = sun.lng - hourAngle;
-          
-          const pt = map.project([((termLng1 + 180) % 360) - 180, lat]);
-          if (pt.x >= -50 && pt.x <= rect.width + 50 && pt.y >= -50 && pt.y <= rect.height + 50) {
-            nightPoints.push({ x: pt.x, y: pt.y });
-          }
-        }
-      }
-      
-      // Simpler approach: just darken the night hemisphere with a large soft overlay
-      // Sample a grid of points at wider spacing
-      for (let lat = -75; lat <= 75; lat += 8) {
-        for (let lng = -180; lng < 180; lng += 8) {
+      for (let lat = -75; lat <= 75; lat += 10) {
+        for (let lng = -180; lng < 180; lng += 10) {
           const dLng = lng - sun.lng;
           const cosAngle = Math.sin(lat * Math.PI / 180) * Math.sin(sun.lat * Math.PI / 180) +
             Math.cos(lat * Math.PI / 180) * Math.cos(sun.lat * Math.PI / 180) * Math.cos(dLng * Math.PI / 180);
-
           if (cosAngle < 0.05) {
-            const pt = map.project([lng, lat]);
-            if (pt.x < -20 || pt.x > rect.width + 20 || pt.y < -20 || pt.y > rect.height + 20) continue;
+            const pt = projectVisible(lng, lat);
+            if (!pt) continue;
             const darkness = cosAngle < -0.15 ? 0.18 : Math.max(0, (0.05 - cosAngle) * 0.9);
-            // Use larger soft circles instead of hard rectangles
-            const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 18);
+            const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 22);
             grad.addColorStop(0, `rgba(0, 3, 20, ${darkness})`);
             grad.addColorStop(1, `rgba(0, 3, 20, 0)`);
             ctx.fillStyle = grad;
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 18, 0, Math.PI * 2);
+            ctx.arc(pt.x, pt.y, 22, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -383,14 +376,13 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       // === AURORA ===
       for (const a of auroraRef.current) {
         a.phase += a.speed;
-        const pt = map.project([a.lng, a.lat]);
-        if (pt.x < -100 || pt.x > rect.width + 100 || pt.y < -50 || pt.y > rect.height + 50) continue;
+        const pt = projectVisible(a.lng, a.lat);
+        if (!pt) continue;
 
-        // Check if this is on the night side for aurora visibility
         const dLng = a.lng - sun.lng;
         const cosAngle = Math.sin(a.lat * Math.PI / 180) * Math.sin(sun.lat * Math.PI / 180) +
           Math.cos(a.lat * Math.PI / 180) * Math.cos(sun.lat * Math.PI / 180) * Math.cos(dLng * Math.PI / 180);
-        if (cosAngle > 0.1) continue; // skip daytime aurora
+        if (cosAngle > 0.1) continue;
 
         const shimmer = 0.3 + Math.sin(a.phase) * 0.2 + Math.sin(a.phase * 2.3) * 0.1;
         const h = a.hue + Math.sin(a.phase * 0.5) * 20;
@@ -405,7 +397,6 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
         grad.addColorStop(1, `hsla(${h}, 80%, 60%, 0)`);
         ctx.fillStyle = grad;
 
-        // Wavy curtain shape
         ctx.beginPath();
         ctx.moveTo(pt.x - a.width / 2, pt.y - curtainHeight);
         for (let i = 0; i <= a.width; i += 3) {
@@ -428,8 +419,8 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
         puff.lng += puff.drift;
         if (puff.lng > 180) puff.lng -= 360;
         if (puff.lng < -180) puff.lng += 360;
-        const pt = map.project([puff.lng, puff.lat]);
-        if (pt.x < -100 || pt.x > rect.width + 100 || pt.y < -100 || pt.y > rect.height + 100) continue;
+        const pt = projectVisible(puff.lng, puff.lat);
+        if (!pt) continue;
         const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, puff.radius);
         grad.addColorStop(0, `rgba(200, 210, 230, ${puff.opacity})`);
         grad.addColorStop(0.6, `rgba(180, 190, 210, ${puff.opacity * 0.5})`);
@@ -443,8 +434,8 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       // === FOG ===
       for (const fog of fogRef.current) {
         fog.pulse += fog.pulseSpeed;
-        const pt = map.project([fog.lng, fog.lat]);
-        if (pt.x < -150 || pt.x > rect.width + 150 || pt.y < -80 || pt.y > rect.height + 80) continue;
+        const pt = projectVisible(fog.lng, fog.lat);
+        if (!pt) continue;
         const pulseOpacity = fog.opacity * (0.7 + Math.sin(fog.pulse) * 0.3);
         ctx.save();
         const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, fog.width / 2);
@@ -461,9 +452,10 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       // === RAIN ===
       ctx.lineCap = 'round';
       for (const drop of rainRef.current) {
-        const pt = map.project([drop.lng, drop.lat]);
+        const pt = projectVisible(drop.lng, drop.lat);
+        if (!pt) continue;
         const y = pt.y + ((time * drop.speed + drop.yOffset) % (rect.height + 40)) - 20;
-        if (pt.x < -20 || pt.x > rect.width + 20 || y < -20 || y > rect.height + 20) continue;
+        if (y < -20 || y > rect.height + 20) continue;
         ctx.strokeStyle = `rgba(150, 180, 255, ${drop.opacity})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -475,11 +467,12 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       // === SNOW ===
       for (const flake of snowRef.current) {
         flake.wobble += flake.wobbleSpeed;
-        const pt = map.project([flake.lng, flake.lat]);
+        const pt = projectVisible(flake.lng, flake.lat);
+        if (!pt) continue;
         const wobbleX = Math.sin(flake.wobble) * 8;
         const y = pt.y + ((time * flake.fallSpeed + flake.yOffset) % (rect.height + 40)) - 20;
         const x = pt.x + wobbleX;
-        if (x < -20 || x > rect.width + 20 || y < -20 || y > rect.height + 20) continue;
+        if (y < -20 || y > rect.height + 20) continue;
 
         ctx.fillStyle = `rgba(240, 245, 255, ${flake.opacity})`;
         ctx.beginPath();
@@ -503,8 +496,8 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
           streak.lat += (Math.random() - 0.5) * 4;
           streak.lng += (Math.random() - 0.5) * 4;
         }
-        const pt = map.project([streak.lng, streak.lat]);
-        if (pt.x < -50 || pt.x > rect.width + 50 || pt.y < -50 || pt.y > rect.height + 50) continue;
+        const pt = projectVisible(streak.lng, streak.lat);
+        if (!pt) continue;
 
         const lifeFrac = streak.life / streak.maxLife;
         const alpha = lifeFrac < 0.15 ? lifeFrac / 0.15 : lifeFrac > 0.7 ? (1 - lifeFrac) / 0.3 : 1;
@@ -527,11 +520,8 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       trySpawnLightning(now);
       lightningRef.current = lightningRef.current.filter(b => b.frame < b.maxFrame);
       for (const bolt of lightningRef.current) {
-        const pt = map.project([bolt.lng, bolt.lat]);
-        if (pt.x < -50 || pt.x > rect.width + 50 || pt.y < -50 || pt.y > rect.height + 50) {
-          bolt.frame = bolt.maxFrame;
-          continue;
-        }
+        const pt = projectVisible(bolt.lng, bolt.lat);
+        if (!pt) { bolt.frame = bolt.maxFrame; continue; }
         if (bolt.frame === 0 || bolt.frame === 2 || bolt.frame === 4) {
           const fadeIntensity = bolt.intensity * (1 - bolt.frame / bolt.maxFrame);
           drawLightningBolt(ctx, pt.x, pt.y, fadeIntensity);
