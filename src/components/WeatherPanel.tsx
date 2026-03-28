@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useEffect } from 'react';
 import { WeatherData, getWeatherInfo } from '@/lib/weather';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -64,10 +65,34 @@ export default function WeatherPanel({
   onClose: () => void;
   isLoading: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!weather && !isLoading) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    
+    // Delay to avoid closing immediately from the map click that opened it
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 300);
+    
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [weather, isLoading, onClose]);
+
   return (
     <AnimatePresence>
       {(weather || isLoading) && (
         <motion.div
+          ref={panelRef}
           initial={{ x: '100%', opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: '100%', opacity: 0 }}

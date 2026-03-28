@@ -181,41 +181,51 @@ export interface WindCell {
 }
 
 export async function fetchWindGrid(): Promise<WindCell[]> {
-  // Open-Meteo supports grid queries - fetch a global grid
-  // We'll do a sparse grid (every 5 degrees) for the particle animation
+  // Use Open-Meteo multi-location: batch all coords into a few requests
   const cells: WindCell[] = [];
-  const promises: Promise<void>[] = [];
+  const allLats: number[] = [];
+  const allLngs: number[] = [];
   
-  // Batch requests for wind data across the globe
-  for (let lat = -80; lat <= 80; lat += 10) {
-    for (let lng = -180; lng < 180; lng += 10) {
-      promises.push(
-        fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m`
-        ).then(async (res) => {
-          if (!res.ok) return;
-          const data = await res.json();
-          const speed = data.current?.wind_speed_10m || 0;
-          const dir = data.current?.wind_direction_10m || 0;
-          // Convert wind direction + speed to u,v components
-          const dirRad = (dir * Math.PI) / 180;
-          cells.push({
-            lat,
-            lng,
-            u: -speed * Math.sin(dirRad),
-            v: -speed * Math.cos(dirRad),
-            speed,
-          });
-        }).catch(() => {})
-      );
+  // Sparse grid every 15 degrees = ~300 points total
+  for (let lat = -75; lat <= 75; lat += 15) {
+    for (let lng = -180; lng < 180; lng += 15) {
+      allLats.push(lat);
+      allLngs.push(lng);
     }
   }
   
-  // Process in batches of 20 to avoid hammering the API
-  for (let i = 0; i < promises.length; i += 20) {
-    await Promise.all(promises.slice(i, i + 20));
-    if (i + 20 < promises.length) {
-      await new Promise(r => setTimeout(r, 200));
+  // Open-Meteo allows ~50 locations per request
+  const batchSize = 50;
+  for (let i = 0; i < allLats.length; i += batchSize) {
+    const batchLats = allLats.slice(i, i + batchSize);
+    const batchLngs = allLngs.slice(i, i + batchSize);
+    
+    try {
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${batchLats.join(',')}&longitude=${batchLngs.join(',')}&current=wind_speed_10m,wind_direction_10m`
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      
+      const items = Array.isArray(data) ? data : [data];
+      for (const d of items) {
+        if (!d.current) continue;
+        const speed = d.current.wind_speed_10m || 0;
+        const dir = d.current.wind_direction_10m || 0;
+        const dirRad = (dir * Math.PI) / 180;
+        cells.push({
+          lat: d.latitude,
+          lng: d.longitude,
+          u: -speed * Math.sin(dirRad),
+          v: -speed * Math.cos(dirRad),
+          speed,
+        });
+      }
+    } catch {}
+    
+    // Small delay between batches
+    if (i + batchSize < allLats.length) {
+      await new Promise(r => setTimeout(r, 300));
     }
   }
   

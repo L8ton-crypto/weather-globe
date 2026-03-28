@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import mapboxgl from 'mapbox-gl';
 import { WeatherData, fetchWeather, reverseGeocode, fetchWindGrid, WindCell } from '@/lib/weather';
@@ -69,6 +69,7 @@ export default function Home() {
       setWeather(data);
     } catch (err) {
       console.error('Weather fetch error:', err);
+      setWeather(null); // Clear on error so spinner stops
     } finally {
       setIsLoading(false);
     }
