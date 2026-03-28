@@ -164,7 +164,7 @@ export default function Globe({ onLocationClick, windData, activeLayer, userLoca
     if (!map.current || !mapReady || windData.length === 0) return;
     
     const m = map.current;
-    const container = m.getCanvasContainer();
+    const container = m.getContainer();
     
     // Create overlay canvas for particles
     if (!canvasRef.current) {
@@ -173,7 +173,7 @@ export default function Globe({ onLocationClick, windData, activeLayer, userLoca
       canvas.style.top = '0';
       canvas.style.left = '0';
       canvas.style.pointerEvents = 'none';
-      canvas.style.zIndex = '1';
+      canvas.style.zIndex = '5';
       container.appendChild(canvas);
       canvasRef.current = canvas;
     }

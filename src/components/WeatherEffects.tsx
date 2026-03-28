@@ -111,7 +111,7 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
   useEffect(() => {
     if (!map || !enabled || grid.length === 0) return;
 
-    const container = map.getCanvasContainer();
+    const container = map.getContainer();
 
     if (!canvasRef.current) {
       const canvas = document.createElement('canvas');
@@ -119,7 +119,7 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       canvas.style.top = '0';
       canvas.style.left = '0';
       canvas.style.pointerEvents = 'none';
-      canvas.style.zIndex = '2';
+      canvas.style.zIndex = '10';
       container.appendChild(canvas);
       canvasRef.current = canvas;
     }
