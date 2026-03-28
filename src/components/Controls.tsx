@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Wind, Thermometer, CloudRain, Cloud, MapPin, Info } from 'lucide-react';
+import { Wind, Thermometer, CloudRain, Cloud, MapPin, Info, Sparkles } from 'lucide-react';
 
 const LAYERS = [
   { key: 'wind' as const, label: 'Wind', icon: Wind, color: '#4fc3f7' },
@@ -15,11 +15,15 @@ export default function Controls({
   onLayerChange,
   onLocate,
   windLoading,
+  effectsEnabled,
+  onToggleEffects,
 }: {
   activeLayer: 'wind' | 'temp' | 'precip' | 'clouds';
   onLayerChange: (layer: 'wind' | 'temp' | 'precip' | 'clouds') => void;
   onLocate: () => void;
   windLoading: boolean;
+  effectsEnabled: boolean;
+  onToggleEffects: () => void;
 }) {
   return (
     <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-3">
@@ -77,6 +81,17 @@ export default function Controls({
         >
           <MapPin className="w-3.5 h-3.5" />
           My Location
+        </button>
+        <button
+          onClick={onToggleEffects}
+          className={`flex items-center gap-2 px-3 py-2 bg-gray-900/90 backdrop-blur-md rounded-xl border transition-all text-xs ${
+            effectsEnabled
+              ? 'border-purple-500/40 text-purple-300'
+              : 'border-gray-700/50 text-gray-500'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Effects {effectsEnabled ? 'ON' : 'OFF'}
         </button>
       </motion.div>
 

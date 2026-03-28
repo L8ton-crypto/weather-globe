@@ -10,9 +10,10 @@ interface GlobeProps {
   windData: WindCell[];
   activeLayer: 'wind' | 'temp' | 'precip' | 'clouds';
   userLocation: { lat: number; lng: number } | null;
+  onMapReady?: (map: mapboxgl.Map) => void;
 }
 
-export default function Globe({ onLocationClick, windData, activeLayer, userLocation }: GlobeProps) {
+export default function Globe({ onLocationClick, windData, activeLayer, userLocation, onMapReady }: GlobeProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const marker = useRef<mapboxgl.Marker | null>(null);
@@ -52,6 +53,7 @@ export default function Globe({ onLocationClick, windData, activeLayer, userLoca
 
     m.on('load', () => {
       setMapReady(true);
+      if (onMapReady) onMapReady(m);
       
       // Add weather tile layers (OpenWeatherMap free tile layer)
       // Temperature overlay

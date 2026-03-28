@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import mapboxgl from 'mapbox-gl';
 import { WeatherData, fetchWeather, reverseGeocode, fetchWindGrid, WindCell } from '@/lib/weather';
+import { WeatherGridCell, fetchWeatherGrid } from '@/lib/weather-grid';
 import WeatherPanel from '@/components/WeatherPanel';
+import WeatherEffects from '@/components/WeatherEffects';
 import Controls from '@/components/Controls';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Globe as GlobeIcon, Loader2 } from 'lucide-react';
@@ -27,15 +30,23 @@ export default function Home() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [windData, setWindData] = useState<WindCell[]>([]);
   const [windLoading, setWindLoading] = useState(false);
+  const [weatherGrid, setWeatherGrid] = useState<WeatherGridCell[]>([]);
+  const [effectsEnabled, setEffectsEnabled] = useState(true);
+  const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
   const [showSplash, setShowSplash] = useState(true);
 
-  // Load wind data on mount
+  // Load wind data and weather grid on mount
   useEffect(() => {
     setWindLoading(true);
     fetchWindGrid()
       .then(setWindData)
       .catch(console.error)
       .finally(() => setWindLoading(false));
+    
+    // Load weather grid for effects (rain, clouds, lightning)
+    fetchWeatherGrid()
+      .then(setWeatherGrid)
+      .catch(console.error);
   }, []);
 
   // Splash screen
@@ -140,6 +151,14 @@ export default function Home() {
         windData={windData}
         activeLayer={activeLayer}
         userLocation={userLocation}
+        onMapReady={setMapInstance}
+      />
+
+      {/* Weather effects overlay (rain, clouds, lightning) */}
+      <WeatherEffects
+        map={mapInstance}
+        grid={weatherGrid}
+        enabled={effectsEnabled}
       />
 
       {/* Weather panel */}
@@ -155,6 +174,8 @@ export default function Home() {
         onLayerChange={setActiveLayer}
         onLocate={handleLocate}
         windLoading={windLoading}
+        effectsEnabled={effectsEnabled}
+        onToggleEffects={() => setEffectsEnabled(e => !e)}
       />
     </div>
   );
