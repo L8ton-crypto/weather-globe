@@ -179,16 +179,16 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
     }
 
     // Cloud puffs
-    const cloudCells = grid.filter(c => c.cloudCover > 60);
+    const cloudCells = grid.filter(c => c.cloudCover > 75);
     cloudsRef.current = [];
     for (const cell of cloudCells) {
-      const count = Math.floor((cell.cloudCover / 100) * 4);
+      const count = Math.floor((cell.cloudCover / 100) * 2); // fewer puffs
       for (let i = 0; i < count; i++) {
         cloudsRef.current.push({
-          lat: cell.lat + (Math.random() - 0.5) * 10,
-          lng: cell.lng + (Math.random() - 0.5) * 10,
-          radius: 25 + Math.random() * 45,
-          opacity: 0.03 + (cell.cloudCover / 100) * 0.07,
+          lat: cell.lat + (Math.random() - 0.5) * 12,
+          lng: cell.lng + (Math.random() - 0.5) * 12,
+          radius: 30 + Math.random() * 40,
+          opacity: 0.02 + (cell.cloudCover / 100) * 0.04, // much lower opacity
           drift: (Math.random() - 0.5) * 0.015,
         });
       }
@@ -323,22 +323,58 @@ export default function WeatherEffects({ map, grid, enabled }: WeatherEffectsPro
       const time = frameCount.current;
 
       // === DAY/NIGHT TERMINATOR ===
+      // Draw as a smooth filled polygon along the terminator line
       const sun = getSunPosition();
-      // Draw night shadow on the side away from the sun
       ctx.save();
-      for (let lng = -180; lng < 180; lng += 2) {
-        for (let lat = -80; lat <= 80; lat += 2) {
-          // Simple solar angle
+      
+      // Find the terminator line (where cosAngle ≈ 0)
+      // Draw a filled shape for the night side
+      const nightPoints: { x: number; y: number }[] = [];
+      const step = 4;
+      
+      // Trace the terminator from south to north
+      for (let lat = -80; lat <= 80; lat += step) {
+        // Find the longitude where cosAngle = 0 (terminator)
+        const sinLat = Math.sin(lat * Math.PI / 180);
+        const cosLat = Math.cos(lat * Math.PI / 180);
+        const sinDecl = Math.sin(sun.lat * Math.PI / 180);
+        const cosDecl = Math.cos(sun.lat * Math.PI / 180);
+        
+        const cosH = -(sinLat * sinDecl) / (cosLat * cosDecl);
+        
+        if (Math.abs(cosH) <= 1) {
+          const hourAngle = Math.acos(cosH) * (180 / Math.PI);
+          // Two terminator longitudes (east and west of sun)
+          const termLng1 = sun.lng + hourAngle;
+          const termLng2 = sun.lng - hourAngle;
+          
+          const pt = map.project([((termLng1 + 180) % 360) - 180, lat]);
+          if (pt.x >= -50 && pt.x <= rect.width + 50 && pt.y >= -50 && pt.y <= rect.height + 50) {
+            nightPoints.push({ x: pt.x, y: pt.y });
+          }
+        }
+      }
+      
+      // Simpler approach: just darken the night hemisphere with a large soft overlay
+      // Sample a grid of points at wider spacing
+      for (let lat = -75; lat <= 75; lat += 8) {
+        for (let lng = -180; lng < 180; lng += 8) {
           const dLng = lng - sun.lng;
           const cosAngle = Math.sin(lat * Math.PI / 180) * Math.sin(sun.lat * Math.PI / 180) +
             Math.cos(lat * Math.PI / 180) * Math.cos(sun.lat * Math.PI / 180) * Math.cos(dLng * Math.PI / 180);
 
-          if (cosAngle < 0.1) { // night side
+          if (cosAngle < 0.05) {
             const pt = map.project([lng, lat]);
-            if (pt.x < -5 || pt.x > rect.width + 5 || pt.y < -5 || pt.y > rect.height + 5) continue;
-            const darkness = cosAngle < -0.1 ? 0.25 : (0.1 - cosAngle) * 1.25;
-            ctx.fillStyle = `rgba(0, 3, 15, ${Math.min(0.25, darkness)})`;
-            ctx.fillRect(pt.x - 2, pt.y - 2, 4, 4);
+            if (pt.x < -20 || pt.x > rect.width + 20 || pt.y < -20 || pt.y > rect.height + 20) continue;
+            const darkness = cosAngle < -0.15 ? 0.18 : Math.max(0, (0.05 - cosAngle) * 0.9);
+            // Use larger soft circles instead of hard rectangles
+            const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 18);
+            grad.addColorStop(0, `rgba(0, 3, 20, ${darkness})`);
+            grad.addColorStop(1, `rgba(0, 3, 20, 0)`);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 18, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
       }

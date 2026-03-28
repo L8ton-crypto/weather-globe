@@ -237,8 +237,8 @@ export default function Globe({ onLocationClick, windData, activeLayer, userLoca
       const rect = container.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
       
-      // Only show particles on wind layer
-      if (activeLayer !== 'wind') {
+      // Only show particles on wind layer AND when we have data
+      if (activeLayer !== 'wind' || windData.length === 0) {
         animationRef.current = requestAnimationFrame(animate);
         return;
       }
